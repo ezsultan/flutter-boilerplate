@@ -1,0 +1,41 @@
+name: flutter_boilerplate
+description: A Flutter boilerplate with feature-first architecture inspired by backend development patterns.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.2.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  provider: ^6.1.1
+
+  # HTTP Client
+  dio: ^5.4.0
+
+  # Local Storage
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
+  # Secure Storage (JWT Tokens)
+  flutter_secure_storage: ^9.0.0
+
+  # Routing
+  go_router: ^13.0.1
+
+  # Connectivity
+  connectivity_plus: ^5.0.2
+
+  # Logger
+  logger: ^2.0.2+1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
