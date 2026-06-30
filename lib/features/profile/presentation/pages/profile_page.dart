@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../provider/profile_provider.dart';
 import '../../../auth/presentation/provider/auth_provider.dart';
@@ -12,22 +12,22 @@ import '../../../../core/widgets/error_widget.dart';
 /// - Shows user profile data loaded from the API.
 /// - Provides logout functionality.
 /// - In a backend project, this is like a profile endpoint.
-class ProfilePage extends StatefulWidget {
+class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
 
   @override
-  State<ProfilePage> createState() => _ProfilePageState();
+  ConsumerState<ProfilePage> createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> {
+class _ProfilePageState extends ConsumerState<ProfilePage> {
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authProvider = context.read<AuthProvider>();
-      if (authProvider.currentUser != null) {
-        context.read<ProfileProvider>().loadProfile(
-              authProvider.currentUser!.id,
+      final authState = ref.read(authProvider);
+      if (authState.currentUser != null) {
+        ref.read(profileProvider.notifier).loadProfile(
+              authState.currentUser!.id,
             );
       }
     });
@@ -35,9 +35,9 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = context.watch<AuthProvider>();
-    final profileProvider = context.watch<ProfileProvider>();
-    final user = authProvider.currentUser;
+    final authState = ref.watch(authProvider);
+    final profileState = ref.watch(profileProvider);
+    final user = authState.currentUser;
 
     return Scaffold(
       appBar: AppBar(
@@ -47,7 +47,7 @@ class _ProfilePageState extends State<ProfilePage> {
             icon: const Icon(Icons.logout),
             tooltip: 'Logout',
             onPressed: () async {
-              await authProvider.logout();
+              await ref.read(authProvider.notifier).logout();
               if (context.mounted) {
                 context.go('/login');
               }
@@ -55,25 +55,27 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
         ],
       ),
-      body: _buildBody(profileProvider, user),
+      body: _buildBody(profileState, user),
     );
   }
 
-  Widget _buildBody(ProfileProvider provider, dynamic user) {
-    if (provider.isLoading) {
+  Widget _buildBody(ProfileState state, dynamic user) {
+    if (state.isLoading) {
       return const LoadingWidget(message: 'Loading profile...');
     }
 
-    if (provider.error != null) {
+    if (state.error != null) {
       return AppErrorWidget(
-        message: provider.error!,
+        message: state.error!,
         onRetry: () {
-          if (user != null) provider.loadProfile(user.id);
+          if (user != null) {
+            ref.read(profileProvider.notifier).loadProfile(user.id);
+          }
         },
       );
     }
 
-    final profile = provider.profile;
+    final profile = state.profile;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),

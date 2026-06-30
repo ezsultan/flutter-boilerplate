@@ -1,17 +1,20 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../features/auth/data/repository/auth_repository.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/splash_page.dart';
 import '../../features/home/presentation/pages/detail_page.dart';
 import '../../features/home/presentation/pages/home_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
+import '../../features/auth/presentation/provider/auth_provider.dart';
+import '../../features/auth/data/repository/auth_repository.dart';
+import '../providers/providers.dart';
 
-/// Application route definitions using GoRouter.
+/// Application route definitions using GoRouter (Riverpod integration).
 ///
 /// Why this exists:
 /// - Centralizes all routing logic in one place.
-/// - Supports redirect guards for authentication.
-/// - In a backend project, this is like your router configuration or middleware stack.
+/// - Watches auth state reactively via Riverpod.
+/// - Rebuilds when auth state changes so the redirect guard stays in sync.
 ///
 /// Route flow:
 /// /splash -> checks auth state
@@ -26,15 +29,20 @@ import '../../features/profile/presentation/pages/profile_page.dart';
 class AppRouter {
   AppRouter._();
 
-  /// Creates the GoRouter instance with all route definitions.
+  /// Creates the GoRouter instance as a Riverpod provider.
   ///
-  /// Takes an [authRepository] so the router can check auth state directly
-  /// without depending on a Provider (which requires a BuildContext).
-  static GoRouter createRouter(AuthRepository authRepository) {
+  /// Watches [authProvider] so the router re-creates whenever auth state changes,
+  /// ensuring the redirect guard always has the latest auth status.
+  static final provider = Provider<GoRouter>((ref) {
+    // Watch auth state so the router rebuilds on auth changes.
+    ref.watch(authProvider);
+
+    final authRepo = ref.read(authRepositoryProvider);
+
     return GoRouter(
       initialLocation: '/splash',
       redirect: (context, state) {
-        return _authGuard(authRepository, state);
+        return _authGuard(authRepo, state);
       },
       routes: [
         GoRoute(
@@ -67,14 +75,14 @@ class AppRouter {
         ),
       ],
     );
-  }
+  });
 
   /// Auth guard that redirects unauthenticated users to /login.
   ///
   /// Why this exists:
   /// - Protects routes from being accessed without authentication.
   /// - Automatically runs on every navigation.
-  /// - In a backend project, this is like a middleware or guard.
+  /// - Uses AuthRepository.isLoggedIn() for synchronous check.
   static String? _authGuard(AuthRepository authRepository, GoRouterState state) {
     final isLoggedIn = authRepository.isLoggedIn();
     final isAuthRoute = state.matchedLocation == '/login';

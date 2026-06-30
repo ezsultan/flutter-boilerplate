@@ -1,26 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/routes/app_router.dart';
 import 'core/storage/hive_service.dart';
 import 'core/theme/app_theme.dart';
-import 'features/auth/data/datasource/auth_local_datasource.dart';
-import 'features/auth/data/datasource/auth_remote_datasource.dart';
-import 'features/auth/data/repository/auth_repository.dart';
-import 'features/auth/presentation/provider/auth_provider.dart';
-import 'features/home/data/datasource/post_remote_datasource.dart';
-import 'features/home/data/repository/post_repository.dart';
-import 'features/home/presentation/provider/home_provider.dart';
-import 'features/profile/data/datasource/profile_remote_datasource.dart';
-import 'features/profile/data/repository/profile_repository.dart';
-import 'features/profile/presentation/provider/profile_provider.dart';
-import 'core/network/api_client.dart';
+import 'core/providers/providers.dart';
 
 /// Entry point of the application.
 ///
 /// Why this exists:
-/// - Initializes all services (Hive, Dio, Providers) before running the app.
-/// - This is the "composition root" — everything is wired together here.
-/// - No dependency injection framework is used; we do manual constructor injection.
+/// - Initializes all services (Hive) before running the app.
+/// - Wraps the app in ProviderScope (Riverpod's root widget) for state management.
+/// - Injects the initialized HiveService via ProviderScope overrides.
 void main() async {
   // Ensure Flutter bindings are initialized before using any plugins.
   // This is REQUIRED when calling async code before runApp().
@@ -30,59 +20,14 @@ void main() async {
   // This must be done before any Hive-dependent code runs.
   final hiveService = await HiveService.init();
 
-  // Create the DIO HTTP client.
-  // It handles token injection, refreshing, and error mapping automatically.
-  final apiClient = ApiClient();
-
-  // ── Datasources ──────────────────────────────────────────────
-  // Datasources are the lowest layer — they talk to external systems.
-  // They know nothing about Providers or Pages.
-  final authRemoteDatasource = AuthRemoteDatasource(apiClient: apiClient);
-  final authLocalDatasource = AuthLocalDatasource(hiveService: hiveService);
-  final postRemoteDatasource = PostRemoteDatasource(apiClient: apiClient);
-  final profileRemoteDatasource = ProfileRemoteDatasource(apiClient: apiClient);
-
-  // ── Repositories ─────────────────────────────────────────────
-  // Repositories combine multiple datasources (remote + local) and
-  // expose clean domain-level data to Providers.
-  final authRepository = AuthRepository(
-    remoteDatasource: authRemoteDatasource,
-    localDatasource: authLocalDatasource,
-  );
-  final postRepository = PostRepository(
-    remoteDatasource: postRemoteDatasource,
-  );
-  final profileRepository = ProfileRepository(
-    remoteDatasource: profileRemoteDatasource,
-  );
-
   runApp(
-    MultiProvider(
-      providers: [
-        // ── AuthProvider ───────────────────────────────────────
-        // Handles login, logout, token refresh, and auto-login.
-        // This MUST be above other providers since they depend on auth state.
-        ChangeNotifierProvider<AuthProvider>(
-          create: (_) => AuthProvider(
-            authRepository: authRepository,
-          )..tryAutoLogin(),
-        ),
-
-        // ── HomeProvider ───────────────────────────────────────
-        // Loads and manages the list of posts on the home screen.
-        ChangeNotifierProvider<HomeProvider>(
-          create: (_) => HomeProvider(
-            postRepository: postRepository,
-          ),
-        ),
-
-        // ── ProfileProvider ────────────────────────────────────
-        // Loads and manages the current user's profile data.
-        ChangeNotifierProvider<ProfileProvider>(
-          create: (_) => ProfileProvider(
-            profileRepository: profileRepository,
-          ),
-        ),
+    // ProviderScope is Riverpod's root widget — it must wrap the entire app.
+    // All Riverpod providers are scoped under this widget tree.
+    ProviderScope(
+      overrides: [
+        // Inject the initialized HiveService singleton into the provider tree.
+        // This way, all downstream providers can access it via ref.watch().
+        hiveServiceProvider.overrideWithValue(hiveService),
       ],
       child: const FlutterBoilerplateApp(),
     ),
@@ -94,15 +39,16 @@ void main() async {
 /// Why this exists:
 /// - It wraps the app with the GoRouter for declarative navigation.
 /// - It sets the Material theme for consistent UI.
-class FlutterBoilerplateApp extends StatelessWidget {
+/// - It extends [ConsumerWidget] (Riverpod) instead of [StatelessWidget] so it
+///   can watch providers directly via ref.
+class FlutterBoilerplateApp extends ConsumerWidget {
   const FlutterBoilerplateApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // Listen to AuthProvider for routing decisions.
-    // When auth state changes, GoRouter will rebuild and redirect accordingly.
-    final authProvider = context.watch<AuthProvider>();
-    final router = AppRouter.createRouter(authProvider.authRepository);
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Watch the router provider — it rebuilds whenever auth state changes,
+    // which ensures the redirect guard is always up to date.
+    final router = ref.watch(AppRouter.provider);
 
     return MaterialApp.router(
       title: 'Flutter Boilerplate',

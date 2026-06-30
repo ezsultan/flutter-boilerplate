@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 import '../provider/auth_provider.dart';
 
 /// Splash screen shown on app startup.
@@ -12,20 +12,21 @@ import '../provider/auth_provider.dart';
 ///
 /// Flow:
 /// 1. User opens app → SplashPage shows.
-/// 2. AuthProvider.tryAutoLogin() runs (called in main.dart).
-/// 3. When auto-login completes, GoRouter redirects based on auth state.
-/// 4. Authenticated → /home. Unauthenticated → /login.
-class SplashPage extends StatelessWidget {
+/// 2. AuthNotifier._tryAutoLogin() runs automatically (called in build()).
+/// 3. When auto-login completes, the notifier updates auth state.
+/// 4. GoRouter's redirect guard (watching authProvider) picks up the change
+///    and redirects: authenticated → /home, unauthenticated → /login.
+class SplashPage extends ConsumerWidget {
   const SplashPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // Listen to auth state changes.
-    final authProvider = context.watch<AuthProvider>();
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Listen to auth state changes via Riverpod.
+    final authState = ref.watch(authProvider);
 
     // When auto-login finishes, navigate accordingly.
-    if (!authProvider.isLoading) {
-      if (authProvider.isAuthenticated) {
+    if (!authState.isLoading) {
+      if (authState.isAuthenticated) {
         // Use a post-frame callback to avoid navigation during build.
         WidgetsBinding.instance.addPostFrameCallback((_) {
           context.go('/home');
